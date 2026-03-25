@@ -41,7 +41,7 @@ export async function registerHandler(req: Request, res: Response) {
 
     const verifyToken = jwt.sign(
       { _id: newUser._id },
-      process.env.JWT_ACCESS_SECRET!,
+      process.env.JWT_EMAIL_VERIFICATION_SECRET!,
       { expiresIn: "1d" },
     );
 
