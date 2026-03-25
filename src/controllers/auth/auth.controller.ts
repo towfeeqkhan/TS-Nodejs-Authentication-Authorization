@@ -1,9 +1,11 @@
 import { Request, Response } from "express";
-import { registerSchema } from "./auth.schema";
+import { loginSchema, registerSchema } from "./auth.schema";
 import { User } from "../../models/user.model";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../../lib/email";
+import { generateToken } from "../../lib/token";
+import ms from "ms";
 
 export async function registerHandler(req: Request, res: Response) {
   try {
@@ -32,7 +34,7 @@ export async function registerHandler(req: Request, res: Response) {
     const newUser = await User.create({
       email,
       passwordHash,
-      role: "user",
+      name,
     });
 
     // email verification
@@ -58,6 +60,7 @@ export async function registerHandler(req: Request, res: Response) {
       message: "User registered",
       user: {
         _id: newUser._id,
+        name: newUser.name,
         email: newUser.email,
         role: newUser.role,
         isEmailVerified: newUser.isEmailVerified,
@@ -79,7 +82,10 @@ export async function verifyEmailHandler(req: Request, res: Response) {
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET!) as {
+    const payload = jwt.verify(
+      token,
+      process.env.JWT_EMAIL_VERIFICATION_SECRET!,
+    ) as {
       _id: string;
     };
 
@@ -92,13 +98,72 @@ export async function verifyEmailHandler(req: Request, res: Response) {
     }
 
     if (user.isEmailVerified) {
-      return res.json({ message: "Email is already verified" });
+      return res.status(400).json({ message: "Email is already verified" });
     }
 
     user.isEmailVerified = true;
     await user.save();
 
-    res.json({ message: "Email is now verified, You can login" });
+    res.json({ message: "Email verified successfully. You can now login." });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function loginHandler(req: Request, res: Response) {
+  try {
+    const validation = loginSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        message: "Invalid data",
+        errors: validation.error.flatten(),
+      });
+    }
+
+    const { email, password } = validation.data;
+
+    const user = await User.findOne({ email: email });
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (!user.isEmailVerified) {
+      return res.status(403).json({ message: "Please verify your email" });
+    }
+
+    const { accessToken, refreshToken } = generateToken(
+      user._id.toString(),
+      user.role,
+      user.tokenVersion,
+    );
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: ms("7d"),
+    });
+
+    res.json({
+      message: "Login successful",
+      user: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        twoFactorEnabled: user.twoFactorEnabled,
+      },
+      accessToken,
+    });
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Internal server error" });
