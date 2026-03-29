@@ -3,6 +3,7 @@ import {
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
+  resetPasswordSchema,
 } from "./auth.schema";
 import { User } from "../../models/user.model";
 import bcrypt from "bcryptjs";
@@ -288,6 +289,56 @@ export async function forgotPasswordHandler(req: Request, res: Response) {
     return res.status(200).json({
       message:
         "If an account with this email exists, we will send a reset link",
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function resetPasswordHandler(req: Request, res: Response) {
+  try {
+    const validation = resetPasswordSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        message: "Invalid data",
+        errors: validation.error.flatten(),
+      });
+    }
+
+    const { token, newPassword } = validation.data;
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: tokenHash,
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid or expired reset token",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    user.passwordHash = passwordHash;
+
+    // Clear reset token fields
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+
+    // Invalidate all refresh tokens
+    user.tokenVersion += 1;
+
+    await user.save();
+
+    return res.status(200).json({
+      message: "Password reset successfully",
     });
   } catch (err) {
     console.log(err);
