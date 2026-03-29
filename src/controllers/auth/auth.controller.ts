@@ -92,7 +92,7 @@ export async function verifyEmailHandler(req: Request, res: Response) {
     const user = await User.findById(payload._id);
 
     if (!user) {
-      return res.status(404).json({
+      return res.status(401).json({
         message: "User not found",
       });
     }
@@ -104,7 +104,9 @@ export async function verifyEmailHandler(req: Request, res: Response) {
     user.isEmailVerified = true;
     await user.save();
 
-    res.json({ message: "Email verified successfully. You can now login." });
+    res
+      .status(200)
+      .json({ message: "Email verified successfully. You can now login." });
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Internal server error" });
@@ -153,7 +155,7 @@ export async function loginHandler(req: Request, res: Response) {
       maxAge: ms("7d"),
     });
 
-    res.json({
+    res.status(200).json({
       message: "Login successful",
       user: {
         _id: user._id,
@@ -163,6 +165,52 @@ export async function loginHandler(req: Request, res: Response) {
         twoFactorEnabled: user.twoFactorEnabled,
       },
       accessToken,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function refreshHandler(req: Request, res: Response) {
+  try {
+    const refreshToken = req.cookies?.refreshToken as string | undefined;
+
+    if (!refreshToken) {
+      return res.status(401).json({ message: "Refresh token is missing" });
+    }
+
+    const payload = jwt.verify(
+      refreshToken,
+      process.env.JWT_REFRESH_SECRET!,
+    ) as {
+      _id: string;
+      tokenVersion: number;
+    };
+
+    const user = await User.findById(payload._id);
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    if (user.tokenVersion !== payload.tokenVersion) {
+      return res.status(401).json({ message: "Token invalid" });
+    }
+
+    const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
+      generateToken(user._id.toString(), user.role, user.tokenVersion);
+
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: ms("7d"),
+    });
+
+    res.status(200).json({
+      message: "Token refreshed",
+      accessToken: newAccessToken,
     });
   } catch (err) {
     console.log(err);

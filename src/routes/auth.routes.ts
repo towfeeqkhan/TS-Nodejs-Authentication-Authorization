@@ -1,6 +1,7 @@
 import express from "express";
 import {
   loginHandler,
+  refreshHandler,
   registerHandler,
   verifyEmailHandler,
 } from "../controllers/auth/auth.controller";
@@ -10,5 +11,6 @@ const router = express.Router();
 router.post("/register", registerHandler);
 router.get("/verify-email", verifyEmailHandler);
 router.post("/login", loginHandler);
+router.post("/refresh", refreshHandler);
 
 export default router;
