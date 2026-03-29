@@ -1,11 +1,16 @@
 import { Request, Response } from "express";
-import { loginSchema, registerSchema } from "./auth.schema";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+} from "./auth.schema";
 import { User } from "../../models/user.model";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../../lib/email";
 import { generateToken } from "../../lib/token";
 import ms from "ms";
+import crypto from "crypto";
 
 export async function registerHandler(req: Request, res: Response) {
   try {
@@ -228,6 +233,61 @@ export async function logoutHandler(req: Request, res: Response) {
 
     return res.status(200).json({
       message: "Logged out successfully",
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function forgotPasswordHandler(req: Request, res: Response) {
+  try {
+    const validation = forgotPasswordSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        message: "Invalid data",
+        errors: validation.error.flatten(),
+      });
+    }
+
+    const { email } = validation.data;
+
+    const user = await User.findOne({ email: email });
+
+    if (!user) {
+      return res.status(200).json({
+        message:
+          "If an account with this email exists, we will send a reset link",
+      });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    user.resetPasswordToken = tokenHash;
+    user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    const resetUrl = `${process.env.APP_URL}/auth/reset-password?token=${rawToken}`;
+
+    await sendEmail(
+      user.email,
+      "Reset your password",
+      `
+      <p>Click on the link below to reset your password.</p>
+      <a href=${resetUrl}>${resetUrl}</a>
+      `,
+    );
+
+    return res.status(200).json({
+      message:
+        "If an account with this email exists, we will send a reset link",
     });
   } catch (err) {
     console.log(err);
