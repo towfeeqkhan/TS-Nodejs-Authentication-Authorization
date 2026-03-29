@@ -56,7 +56,7 @@ export async function registerHandler(req: Request, res: Response) {
       `,
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "User registered",
       user: {
         _id: newUser._id,
@@ -68,7 +68,7 @@ export async function registerHandler(req: Request, res: Response) {
     });
   } catch (err) {
     console.log(err);
-    res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -104,12 +104,12 @@ export async function verifyEmailHandler(req: Request, res: Response) {
     user.isEmailVerified = true;
     await user.save();
 
-    res
+    return res
       .status(200)
       .json({ message: "Email verified successfully. You can now login." });
   } catch (err) {
     console.log(err);
-    res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -155,7 +155,7 @@ export async function loginHandler(req: Request, res: Response) {
       maxAge: ms("7d"),
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Login successful",
       user: {
         _id: user._id,
@@ -168,7 +168,7 @@ export async function loginHandler(req: Request, res: Response) {
     });
   } catch (err) {
     console.log(err);
-    res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -208,12 +208,31 @@ export async function refreshHandler(req: Request, res: Response) {
       maxAge: ms("7d"),
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Token refreshed",
       accessToken: newAccessToken,
     });
   } catch (err) {
     console.log(err);
-    res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function logoutHandler(req: Request, res: Response) {
+  try {
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+
+    return res.status(200).json({
+      message: "Logged out successfully",
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({
+      message: "Internal server error",
+    });
   }
 }
