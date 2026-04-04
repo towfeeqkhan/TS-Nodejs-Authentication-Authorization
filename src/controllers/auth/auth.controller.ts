@@ -58,7 +58,7 @@ export async function registerHandler(req: Request, res: Response) {
       "Verify your email",
       `
       <p>Please verify your email by clicking the link below</p>
-      <a href=${verifyUrl}>${verifyUrl}</a>
+      <a href="${verifyUrl}">${verifyUrl}</a>
       `,
     );
 
@@ -282,7 +282,7 @@ export async function forgotPasswordHandler(req: Request, res: Response) {
       "Reset your password",
       `
       <p>Click on the link below to reset your password.</p>
-      <a href=${resetUrl}>${resetUrl}</a>
+      <a href="${resetUrl}">${resetUrl}</a>
       `,
     );
 
